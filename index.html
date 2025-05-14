@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <title>图书借还系统（Google Sheets版）</title>
+  <style>
+    body { font-family: sans-serif; max-width: 800px; margin: 30px auto; padding: 20px; }
+    h1 { text-align: center; color: #2c3e50; }
+    .input-group { margin-bottom: 15px; }
+    input, button { 
+      font-size: 1.1em; 
+      padding: 10px; 
+      width: 100%; 
+      box-sizing: border-box; 
+    }
+    button { 
+      background: #3498db; 
+      color: white; 
+      border: none; 
+      cursor: pointer;
+      margin-top: 5px;
+    }
+    button:hover { background: #2980b9; }
+    #bookDetails { 
+      background: #f8f9fa; 
+      padding: 15px; 
+      margin-top: 20px; 
+      border-radius: 5px; 
+    }
+    #log { 
+      margin-top: 20px; 
+      padding: 10px; 
+      border-top: 1px solid #eee; 
+    }
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+  <h1>📚 图书借还系统（云端版）</h1>
+
+  <div class="input-group">
+    <input type="text" id="bookName" placeholder="输入书名、作者或出版社">
+    <button onclick="searchBook()">查询图书</button>
+  </div>
+
+  <div id="bookDetails" class="hidden">
+    <h3 id="detailTitle"></h3>
+    <p id="detailAuthor"></p>
+    <p id="detailStock"></p>
+    <div id="borrowSection" class="hidden">
+      <input type="text" id="borrower" placeholder="借阅人姓名">
+      <input type="text" id="idNumber" placeholder="证件号">
+      <button onclick="borrowBook()">借书</button>
+      <button onclick="returnBook()">还书</button>
+    </div>
+  </div>
+
+  <div id="log"></div>
+
+  <script>
+    const scriptURL = 'https://script.google.com/macros/s/AKfycbz5pZAVmQ-mO87hoXa1IkAEiCn7qZ2YJmdv7yIME0dyjAjkvc4yXVGha2mTF9sxeZj-/exec'; // 替换为你的Google Apps Script部署URL
+    let books = [];
+    let selectedBook = null;
+
+    // 页面加载时获取所有图书数据
+    window.onload = function() {
+      fetch(scriptURL)
+        .then(response => response.json())
+        .then(data => {
+          books = data;
+          console.log("云端数据加载成功", books);
+        })
+        .catch(error => {
+          console.error("加载失败", error);
+          alert("无法加载图书数据，请检查网络或表格配置");
+        });
+    };
+
+    function searchBook() {
+      const keyword = document.getElementById('bookName').value.trim();
+      const detailsDiv = document.getElementById('bookDetails');
+      detailsDiv.classList.add('hidden');
+
+      if (!keyword) {
+        showLog('❗ 请输入搜索关键词');
+        return;
+      }
+
+      // 搜索书名、作者或出版社
+      selectedBook = books.find(book => 
+        book.书名.includes(keyword) || 
+        book.作者?.includes(keyword) || 
+        book.出版社?.includes(keyword)
+      );
+
+      if (selectedBook) {
+        document.getElementById('detailTitle').innerText = selectedBook.书名;
+        document.getElementById('detailAuthor').innerText = 
+          `作者：${selectedBook.作者 || '未知'} | 出版社：${selectedBook.出版社 || '未知'}`;
+        document.getElementById('detailStock').innerText = 
+          `库存：${selectedBook.库存}本 | 状态：${selectedBook.状态}`;
+        
+        const borrowSection = document.getElementById('borrowSection');
+        borrowSection.classList.toggle('hidden', selectedBook.状态 !== '可借');
+        detailsDiv.classList.remove('hidden');
+      } else {
+        showLog('❌ 未找到匹配的图书');
+      }
+    }
+
+    function borrowBook() {
+      handleBorrowReturn('borrow');
+    }
+
+    function returnBook() {
+      handleBorrowReturn('return');
+    }
+
+    function handleBorrowReturn(action) {
+      const borrower = document.getElementById('borrower').value.trim();
+      const idNumber = document.getElementById('idNumber').value.trim();
+
+      if (!borrower || !idNumber) {
+        showLog('❗ 请填写完整借阅人信息');
+        return;
+      }
+
+      fetch(scriptURL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: action,
+          bookName: selectedBook.书名,
+          borrower: borrower,
+          idNumber: idNumber
+        })
+      })
+      .then(response => response.json())
+      .then(data => {
+        if (data.success) {
+          showLog(`✅ ${action === 'borrow' ? '借书' : '还书'}成功：${selectedBook.书名}`);
+          // 刷新数据
+          window.location.reload();
+        }
+      })
+      .catch(error => {
+        console.error("操作失败", error);
+        showLog('❌ 操作失败，请检查网络');
+      });
+    }
+
+    function showLog(message) {
+      document.getElementById('log').innerHTML = message;
+    }
+  </script>
+</body>
+</html>
